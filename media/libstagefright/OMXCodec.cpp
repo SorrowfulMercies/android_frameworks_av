@@ -219,10 +219,10 @@ static sp<MediaSource> InstantiateSoftwareDecoder(
 #undef FACTORY_CREATE_ENCODER
 #undef FACTORY_REF
 
-#define CODEC_LOGI(x, ...) ALOGI("[%s] " x, mComponentName, ##__VA_ARGS__)
-#define CODEC_LOGV(x, ...) ALOGV("[%s] " x, mComponentName, ##__VA_ARGS__)
-#define CODEC_LOGW(x, ...) ALOGW("[%s] " x, mComponentName, ##__VA_ARGS__)
-#define CODEC_LOGE(x, ...) ALOGE("[%s] " x, mComponentName, ##__VA_ARGS__)
+#define CODEC_LOGI(x, ...) ALOGI("[%s] "x, mComponentName, ##__VA_ARGS__)
+#define CODEC_LOGV(x, ...) ALOGV("[%s] "x, mComponentName, ##__VA_ARGS__)
+#define CODEC_LOGW(x, ...) ALOGW("[%s] "x, mComponentName, ##__VA_ARGS__)
+#define CODEC_LOGE(x, ...) ALOGE("[%s] "x, mComponentName, ##__VA_ARGS__)
 
 struct OMXCodecObserver : public BnOMXObserver {
     OMXCodecObserver() {
@@ -628,7 +628,7 @@ status_t OMXCodec::parseHEVCCodecSpecificData(
     const uint8_t *ptr = (const uint8_t *)data;
 
     // verify minimum size and configurationVersion == 1.
-    if (size < 23 || ptr[0] != 1) {
+    if (size < 7) {
         return ERROR_MALFORMED;
     }
 
@@ -643,9 +643,6 @@ status_t OMXCodec::parseHEVCCodecSpecificData(
     size -= 1;
     size_t j = 0, i = 0;
     for (i = 0; i < numofArrays; i++) {
-        if (size < 3) {
-            return ERROR_MALFORMED;
-        }
         ptr += 1;
         size -= 1;
 
@@ -1720,17 +1717,11 @@ status_t OMXCodec::setVideoOutputFormat(
                 && colorFormat != OMX_COLOR_FormatUnused
                 && colorFormat != format.eColorFormat) {
 
-            OMX_U32 index = 1; // Index 0 is retrieved above.
-            while (index < kMaxColorFormatSupported) {
-                format.nIndex = index++;
+            while (OMX_ErrorNoMore != err) {
+                format.nIndex++;
                 err = mOMX->getParameter(
                         mNode, OMX_IndexParamVideoPortFormat,
                             &format, sizeof(format));
-                if (OK != err) {
-                    format.eColorFormat = OMX_COLOR_FormatUnused;
-                    break;
-                }
-
                 if (format.eColorFormat == colorFormat) {
                     break;
                 }
@@ -2117,7 +2108,9 @@ status_t OMXCodec::allocateBuffersOnPort(OMX_U32 portIndex) {
 
     for (OMX_U32 i = 0; i < def.nBufferCountActual; ++i) {
         sp<IMemory> mem = mDealer[portIndex]->allocate(def.nBufferSize);
-        CHECK(mem.get() != NULL);
+        if (mem == NULL || mem->pointer() == NULL) {
+            return NO_MEMORY;
+        }
 
         BufferInfo info;
         info.mData = NULL;
@@ -3477,8 +3470,7 @@ status_t OMXCodec::freeBuffersOnPort(
 
     status_t stickyErr = OK;
 
-    for (size_t i = buffers->size(); i > 0;) {
-        i--;
+    for (size_t i = buffers->size(); i-- > 0;) {
         BufferInfo *info = &buffers->editItemAt(i);
 
         if (onlyThoseWeOwn && info->mStatus == OWNED_BY_COMPONENT) {
