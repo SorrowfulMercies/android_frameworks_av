@@ -1,3 +1,4 @@
+
 /*
  * Copyright (C) 2009 The Android Open Source Project
  *
@@ -1801,13 +1802,13 @@ status_t MPEG4Extractor::parseChunk(off64_t *offset, int depth) {
             break;
         }
 
-        // ©xyz
+        // Â©xyz
         case FOURCC(0xA9, 'x', 'y', 'z'):
         {
             *offset += chunk_size;
 
-            // Best case the total data length inside "©xyz" box
-            // would be 8, for instance "©xyz" + "\x00\x04\x15\xc7" + "0+0/",
+            // Best case the total data length inside "Â©xyz" box
+            // would be 8, for instance "Â©xyz" + "\x00\x04\x15\xc7" + "0+0/",
             // where "\x00\x04" is the text string length with value = 4,
             // "\0x15\xc7" is the language code = en, and "0+0" is a
             // location (string) value with longitude = 0 and latitude = 0.
@@ -2186,10 +2187,6 @@ status_t MPEG4Extractor::parseChunk(off64_t *offset, int depth) {
             uint32_t type;
             const void *data;
             size_t size = 0;
-
-            if (!mLastTrack)
-                return ERROR_MALFORMED;
-
             if (!mLastTrack->meta->findData(
                     kKeyTextFormatData, &type, &data, &size)) {
                 size = 0;
@@ -2491,7 +2488,6 @@ status_t MPEG4Extractor::parseTrackHeader(
 #if 0
     int32_t dx = U32_AT(&buffer[matrixOffset + 8]);
     int32_t dy = U32_AT(&buffer[matrixOffset + 20]);
-
     ALOGI("x' = %.2f * x + %.2f * y + %.2f",
          a00 / 65536.0f, a01 / 65536.0f, dx / 65536.0f);
     ALOGI("y' = %.2f * x + %.2f * y + %.2f",
@@ -4128,7 +4124,6 @@ status_t MPEG4Source::read(
         uint32_t syncSampleTime;
         CHECK_EQ(OK, mSampleTable->getMetaDataForSample(
                     syncSampleIndex, NULL, NULL, &syncSampleTime));
-
         ALOGI("seek to time %lld us => sample at time %lld us, "
              "sync sample at time %lld us",
              seekTimeUs,
@@ -4299,7 +4294,15 @@ status_t MPEG4Source::read(
                     continue;
                 }
 
-                CHECK(dstOffset + 4 <= mBuffer->size());
+                if (dstOffset > SIZE_MAX - 4 ||
+                        dstOffset + 4 > SIZE_MAX - nalLength ||
+                        dstOffset + 4 + nalLength > mBuffer->size()) {
+                    ALOGE("b/27208621 : %zu %zu", dstOffset, mBuffer->size());
+                    android_errorWriteLog(0x534e4554, "27208621");
+                    mBuffer->release();
+                    mBuffer = NULL;
+                    return ERROR_MALFORMED;
+                }
 
                 dstData[dstOffset++] = 0;
                 dstData[dstOffset++] = 0;
